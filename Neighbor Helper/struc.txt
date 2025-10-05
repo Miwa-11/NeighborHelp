@@ -1,0 +1,36 @@
+neighborhelp/
+├─ .env                      # VITE_SUPABASE_URL, VITE_SUPABASE_ANON, MAP_TOKEN (if Mapbox)
+├─ index.html
+├─ src/
+│  ├─ main.jsx
+│  ├─ App.jsx
+│  ├─ lib/
+│  │  ├─ supabaseClient.js
+│  │  └─ ai.js              # simple keyword/tag classifier (MVP) or API call wrapper
+│  ├─ auth/
+│  │  ├─ AuthProvider.jsx
+│  │  └─ RequireAuth.jsx
+│  ├─ api/
+│  │  ├─ posts.js           # read/write helpers to Supabase
+│  │  └─ profiles.js
+│  ├─ pages/
+│  │  ├─ LoginPage.jsx
+│  │  ├─ MeRouter.jsx       # redirects user → /u/:id or onboarding
+│  │  ├─ Onboarding.jsx
+│  │  ├─ map/
+│  │  │  └─ MapPosts.jsx    # live map of posts (public)
+│  │  ├─ posts/
+│  │  │  ├─ PostForm.jsx    # add post
+│  │  │  ├─ PostsList.jsx   # /post (nearby / all)
+│  │  │  └─ PostDetail.jsx  # /posts/:postId
+│  │  └─ user/
+│  │     ├─ UserDashboard.jsx      # /u/:userId (unique per user)
+│  │     └─ MyPosts.jsx            # user’s own posts
+│  ├─ components/
+│  │  ├─ NavBar.jsx
+│  │  ├─ PostCard.jsx
+│  │  ├─ MapView.jsx        # Leaflet/Mapbox wrapper
+│  │  └─ CategoryBadge.jsx
+│  └─ styles/
+│     └─ index.css
+└─ package.json

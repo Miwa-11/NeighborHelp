@@ -1,0 +1,257 @@
+// src/pages/LoginPage.jsx
+import React, { useState } from "react";
+import { MapPin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+
+  const [isSignup, setIsSignup] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    phone: "",
+    streetAddress: "",
+    city: "",
+    state: "",
+    postalCode: "",
+  });
+
+  // Helper to map Supabase messages to friendlier text
+  const explain = (err) => {
+    const msg = (err?.message || "").toLowerCase();
+    if (msg.includes("email not confirmed")) return "Please confirm your email first (check your inbox).";
+    if (msg.includes("invalid login credentials")) return "Invalid email or password.";
+    if (msg.includes("signup requires valid password")) return "Password is required to sign up.";
+    return err?.message || "Something went wrong";
+  };
+
+  const upsertProfile = async (user) => {
+    // IMPORTANT: include user_id so RLS passes (auth.uid() = user_id)
+    const { error } = await supabase
+      .from("users")
+      .upsert(
+        {
+          user_id: user.id, // <-- FK to auth.users(id)
+          email: user.email,
+          first_name: formData.firstName || null,
+          last_name: formData.lastName || null,
+          phone: formData.phone || null,
+          street: formData.streetAddress || null,
+          city: formData.city || null,
+          state: formData.state || null,
+          postal_code: formData.postalCode || null,
+        },
+        { onConflict: "user_id" } // requires unique/PK on user_id
+      );
+    if (error) throw error;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+
+    setLoading(true);
+
+    const email = (formData.email || "").trim().toLowerCase();
+    const password = (formData.password || "").trim();
+
+    try {
+      if (isSignup) {
+        // --- SIGN UP ---
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password, // required for password flow
+          options: {
+            emailRedirectTo: `${window.location.origin}/me`,
+          },
+        });
+        if (signUpError) throw signUpError;
+
+        // If email confirmations are ON, Supabase returns NO session here.
+        // In that case we can't upsert (RLS would fail because auth.uid() is null).
+        const session = data.session ?? (await supabase.auth.getSession()).data.session;
+        if (!session) {
+          alert("Check your email to confirm your account, then log in.");
+          return;
+        }
+
+        // Email confirmations OFF -> we have a session and can upsert now
+        await upsertProfile(session.user);
+        navigate("/me");
+      } else {
+        // --- LOGIN ---
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+
+        // Ensure a profile row exists/updated after login
+        await upsertProfile(data.user);
+        navigate("/me");
+      }
+    } catch (err) {
+      console.error(err);
+      alert(explain(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-full mb-4">
+            <MapPin className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900">Neighborhood Help</h1>
+          <p className="text-gray-600 mt-2">Connect and support your community</p>
+        </div>
+
+        {/* Toggle */}
+        <div className="flex gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setIsSignup(false)}
+            className={`flex-1 py-2 rounded-lg font-medium transition ${!isSignup ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsSignup(true)}
+            className={`flex-1 py-2 rounded-lg font-medium transition ${isSignup ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {/* Form */}
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          {isSignup && (
+            <>
+              <input
+                type="text"
+                placeholder="First Name"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="given-name"
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="family-name"
+              />
+            </>
+          )}
+
+          <input
+            type="email"
+            placeholder="Email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="w-full px-4 py-3 border rounded-lg"
+            autoComplete="email"
+            required
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            className="w-full px-4 py-3 border rounded-lg"
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            required
+            minLength={6}
+          />
+
+          {isSignup && (
+            <>
+              <input
+                type="tel"
+                placeholder="Phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="tel"
+              />
+              <input
+                type="text"
+                placeholder="Street Address"
+                value={formData.streetAddress}
+                onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="street-address"
+              />
+              <input
+                type="text"
+                placeholder="City"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="address-level2"
+              />
+
+              {/* State input + dropdown side by side */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="State"
+                  className="flex-1 px-4 py-3 border rounded-lg"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  autoComplete="address-level1"
+                />
+                <select
+                  className="flex-1 px-4 py-3 border rounded-lg"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                >
+                  <option value="">Select a state</option>
+                  {[
+                    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+                    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+                    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+                  ].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Postal Code"
+                value={formData.postalCode}
+                onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                className="w-full px-4 py-3 border rounded-lg"
+                autoComplete="postal-code"
+              />
+            </>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full ${loading ? "bg-green-400" : "bg-green-700 hover:bg-green-800"} text-white py-3 rounded-lg font-medium transition`}
+          >
+            {loading ? "Please wait..." : isSignup ? "Create Account" : "Log In"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
